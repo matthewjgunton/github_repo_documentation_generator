@@ -1,0 +1,17 @@
+{
+    "name": "Test",
+    "permissions": [
+        "history",
+        "scripting",
+        "activeTab",
+        "<all_urls>"
+    ],
+    "version": "1.0.0",
+    "description": "latest covid data of UK",
+    "manifest_version": 3,
+    "author": "Matthew Gunton",
+    "action":{
+        "default_popup": "index.html",
+        "default_title": "Latest Covid Report"
+    }
+}
