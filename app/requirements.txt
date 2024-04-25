@@ -1,0 +1,4 @@
+groq
+llama-index
+llama-index-readers-github
+python-dotenv
