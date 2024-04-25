@@ -1,41 +1,63 @@
-import os
-from utils import groq_helper
-
-from llama_index.core import SimpleDirectoryReader
-from llama_index.core.node_parser import SentenceSplitter
-#os.environ['OPENAI_API_KEY']=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+from llama_index.readers.github import GithubRepositoryReader, GithubClient
 from llama_index.core import VectorStoreIndex
-from llama_index.readers.github import GithubRepositoryReader
-from IPython.display import Markdown, display
-from dotenv import load_dotenv
 import os
-
-#import environment vars from .env to avoid sharing tokens
-#the .env file is added to the gitignore so will need to manually create one and pass in your token
-load_dotenv()
-
-
-github_token = os.environ.get("GITHUB_TOKEN")
-owner = "jerryjliu"
-repo = "llama_index"
-branch = "main"
-
-documents = GithubRepositoryReader(
-    github_token=github_token,
-    owner=owner,
-    repo=repo,
-    use_parser=False,
-    verbose=False,
-    ignore_directories=["examples"],
-).load_data(branch=branch)
-
-index = VectorStoreIndex.from_documents(documents)
-
-query_engine = index.as_query_engine()
-response = query_engine.query(
-    "What is the difference between VectorStoreIndex and SummaryIndex?",
-    verbose=True,
+from dotenv import load_dotenv
+import faiss
+from llama_index.vector_stores.faiss import FaissVectorStore
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.core import Settings
+from llama_index.core import (
+    SimpleDirectoryReader,
+    load_index_from_storage,
+    VectorStoreIndex,
+    StorageContext,
 )
-    
-#groq_helper(prompt = "Should I apply to a job at Meta?", modelid = 'llama3-70b-8192')
+from llama_index.llms.groq import Groq
 
+#load environment variables from dotenv
+load_dotenv()
+os.environ['TOKENIZERS_PARALLELISM'] = 'true'
+github_token = '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'
+
+#parse GitHub repo and load documents
+owner="ng4567"
+repo="LM2APA"
+client = GithubClient(github_token=github_token)
+reader = GithubRepositoryReader(owner=owner, repo=repo, github_client=client)
+documents = reader.load_data(commit_sha='20af215c907c06910edd41e0de847979a8e29a91')
+
+#Embed Documents
+Settings.embed_model = HuggingFaceEmbedding(
+    model_name="BAAI/bge-small-en-v1.5"
+)
+
+
+#set equal to dimensions of selected embedding model
+d = 384
+
+faiss_index = faiss.IndexFlatL2(d)
+
+vector_store = FaissVectorStore(faiss_index=faiss_index)
+storage_context = StorageContext.from_defaults(vector_store=vector_store)
+index = VectorStoreIndex.from_documents(
+    documents, storage_context=storage_context
+)
+
+# save index to disk
+index.storage_context.persist()
+
+# load index from disk
+vector_store = FaissVectorStore.from_persist_dir("./storage")
+storage_context = StorageContext.from_defaults(
+    vector_store=vector_store, persist_dir="./storage"
+)
+index = load_index_from_storage(storage_context=storage_context)
+
+# set Logging to DEBUG for more detailed outputs
+
+llm = Groq(model="mixtral-8x7b-32768", api_key=os.environ["GROQ_API_KEY"])
+
+query_engine = index.as_query_engine(llm=llm)
+
+response = query_engine.query("What is the data contained in this input?")
+print(response)

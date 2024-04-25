@@ -1,4 +1,11 @@
-groq
+faiss
+torch
+numpy
+sentence-transformers
+transformers
+groq 
+dotenv
 llama-index
-llama-index-readers-github
-python-dotenv
+llama_index.vector_stores.faiss
+llama_index.embeddings.huggingface
+llama_index.readers.github
