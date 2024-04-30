@@ -2,8 +2,6 @@ from llama_index.readers.github import GithubRepositoryReader, GithubClient
 from llama_index.core import VectorStoreIndex
 import os
 from dotenv import load_dotenv
-import faiss
-from llama_index.vector_stores.faiss import FaissVectorStore
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core import Settings
 from llama_index.core import (
@@ -12,6 +10,13 @@ from llama_index.core import (
     VectorStoreIndex,
     StorageContext,
 )
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+from llama_index.vector_stores.chroma import ChromaVectorStore
+from llama_index.core import StorageContext
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from IPython.display import Markdown, display
+import chromadb
+
 from llama_index.llms.groq import Groq
 
 #load environment variables from dotenv
@@ -32,32 +37,23 @@ Settings.embed_model = HuggingFaceEmbedding(
 )
 
 
-#set equal to dimensions of selected embedding model
-d = 384
+chroma_client = chromadb.EphemeralClient()
+chroma_collection = chroma_client.create_collection("quickstart")
 
-faiss_index = faiss.IndexFlatL2(d)
-
-vector_store = FaissVectorStore(faiss_index=faiss_index)
+vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
 storage_context = StorageContext.from_defaults(vector_store=vector_store)
 index = VectorStoreIndex.from_documents(
-    documents, storage_context=storage_context
+    documents, storage_context=storage_context, embed_model=Settings.embed_model
 )
-
-# save index to disk
-index.storage_context.persist()
-
-# load index from disk
-vector_store = FaissVectorStore.from_persist_dir("./storage")
-storage_context = StorageContext.from_defaults(
-    vector_store=vector_store, persist_dir="./storage"
-)
-index = load_index_from_storage(storage_context=storage_context)
-
-# set Logging to DEBUG for more detailed outputs
 
 llm = Groq(model="mixtral-8x7b-32768", api_key=os.environ["GROQ_API_KEY"])
-
 query_engine = index.as_query_engine(llm=llm)
 
-response = query_engine.query("What is the data contained in this input?")
+
+raq_query = "What did the author do growing up?"
+print(f"Query: {raq_query}")
+
+response = query_engine.query(raq_query)
 print(response)
+
+
