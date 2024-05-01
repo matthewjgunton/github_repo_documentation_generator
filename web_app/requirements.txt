@@ -81,7 +81,6 @@ tenacity==8.2.3
 threadpoolctl==3.5.0
 tiktoken==0.6.0
 tokenizers==0.19.1
-torch==2.3.0
 tqdm==4.66.2
 transformers==4.40.1
 typing-inspect==0.9.0
@@ -93,3 +92,6 @@ yarl==1.9.4
 llama_index.vector_stores.chroma
 llama_index.llms.groq
 IPython
+anthropic
+chromadb
+PyPDF2

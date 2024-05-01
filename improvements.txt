@@ -1,3 +1,1 @@
-(1) rate limit is hit quickly
-  - better to build in bigger delays when this happens
-  - 
+> can we show our version is better than the quick llama index version?
