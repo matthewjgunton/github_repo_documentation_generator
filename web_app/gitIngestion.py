@@ -1,4 +1,4 @@
-import anthropic
+from anthropic import Anthropic
 from groq import Groq
 from dotenv import load_dotenv
 import os
@@ -149,7 +149,11 @@ def summarizeDir(list_of_summaries, list_of_file_names, batch_size, client):
 
 # wrapper to let us quickly switch between providers
 def callLLM(prompt, isDir, client):
-    return callAnthropic(prompt, isDir, client)
+
+    if isinstance(client, Groq):
+        return callGroq(prompt, isDir, client)
+    if isinstance(client, Anthropic):
+        return callAnthropic(prompt, isDir, client)
 
 def clean_up_dir(path):
     try:
@@ -216,7 +220,7 @@ class GitIngestion:
         if provider == "groq":
             self.client = Groq(api_key=os.environ["GROQ_API_KEY"])
         if provider == "claude":
-            self.client = anthropic.Anthropic(
+            self.client = Anthropic(
                 api_key=os.environ["ANTHROPIC_API_KEY"]
             )
 
