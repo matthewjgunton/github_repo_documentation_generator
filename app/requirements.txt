@@ -93,3 +93,4 @@ yarl==1.9.4
 llama_index.vector_stores.chroma
 llama_index.llms.groq
 IPython
+nbconvert

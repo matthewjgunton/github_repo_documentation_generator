@@ -1,0 +1,126 @@
+import streamlit as st
+from io import BytesIO
+from utils import groq_helper, set_shared_variable, parse_problems, init_state, extract_text_from_pdf, get_shared_variable, question
+import re
+from llama_index.readers.github import GithubRepositoryReader, GithubClient
+from llama_index.core import VectorStoreIndex
+import os
+from dotenv import load_dotenv
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.core import Settings
+from llama_index.core import (
+    SimpleDirectoryReader,
+    load_index_from_storage,
+    VectorStoreIndex,
+    StorageContext,
+)
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+from llama_index.vector_stores.chroma import ChromaVectorStore
+from llama_index.core import StorageContext
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from IPython.display import Markdown, display
+import chromadb
+from llama_index.llms.groq import Groq
+
+
+load_dotenv()
+os.environ['TOKENIZERS_PARALLELISM'] = 'true'
+github_token = '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'
+
+reader = SimpleDirectoryReader(input_dir="/Users/nikhil/SideProjects/coursera-tensorflow-course/")
+documents =  reader.load_data()
+
+#Embed Documents
+Settings.embed_model = HuggingFaceEmbedding(
+    model_name="BAAI/bge-small-en-v1.5"
+)
+
+# Create the vector store
+chroma_client = chromadb.EphemeralClient()
+chroma_collection = chroma_client.get_or_create_collection("quickstart")
+vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+storage_context = StorageContext.from_defaults(vector_store=vector_store)
+
+# Create the index
+index = VectorStoreIndex.from_documents(
+    documents, storage_context=storage_context, embed_model=Settings.embed_model
+)
+
+# Create the query engine
+llm = Groq(model="mixtral-8x7b-32768", api_key=os.environ["GROQ_API_KEY"])
+query_engine = index.as_query_engine(llm=llm)
+
+#Simple app to extract the math problems from an uploaded PDF file of a math textbook
+def app():
+    init_state()
+
+    #Streamlit portion:
+    st.title("Repo Tools App")
+
+    # Link to textbook used in testing
+    link_to_data = "https://github.com/Significant-Gravitas/AutoGPT.git"
+    st.markdown(f'<label for="file_uploader">Note: This app is a WIP. It is not guaranteed to work with large files or other repos, and so far has only been tested on the following repo: <a href="{link_to_data}" target="_blank">Link</a></label>', unsafe_allow_html=True)
+    
+    st.title("Chat with Lesson Planner Assistant:")
+
+    st.session_state.msg_counter = 0
+
+    if "messages" not in st.session_state:
+            st.session_state.messages = []
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": f"""I am an intelligent AI assistant that can help you understand your Git Repos! Leveraging the power of RAG, I am aware of the contents of your uploaded repository.
+                
+                """
+            })
+
+    # Display chat messages from history on app rerun
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+    
+    # React to user input
+    if prompt := st.chat_input("What do you want to ask the LLM?"):
+        # Display user message in chat message container
+        st.chat_message("user").markdown(prompt)
+        # Add user message to chat history
+        
+        
+        st.session_state.messages.append({"role": "user", 
+                                            "content": prompt,
+                                            'user_message_no': st.session_state.msg_counter})
+        
+        raq_query = prompt
+        rag_response = query_engine.query(raq_query)
+        prompt_for_model = f'''
+        
+        
+        You are a helpful assistant that helps developers understand their Git repos. Here are the files in their repo
+    
+        {rag_response}
+        
+        You will recieve multiple messages throughout the conversation. Here is a list of the previous messages and your responses:
+        
+        {st.session_state.messages}
+        
+        Below the teacher will input their query to you:        
+        ''' + prompt
+        
+        print(st.session_state.messages)
+        
+        response = groq_helper(prompt=prompt_for_model)
+        llm_response = response.choices[0].message.content
+        
+        with st.chat_message("assistant"):
+            st.markdown("Assistant Response:")
+            st.markdown(llm_response)
+            st.markdown(f"RAG Retrieval: {rag_response}")
+            st.markdown(f"Retrieved Response Metadata: {rag_response.metadata}")
+            # Add LLM response to chat history
+            st.session_state.messages.append({"role": "assistant", 
+                                            "content": llm_response,
+                                            "assistant_msg_counter": st.session_state.msg_counter})
+            st.session_state.msg_counter += 1
+        
+if __name__ == "__main__":
+    app()
