@@ -8,7 +8,8 @@ import time
 
 from file_info import FileInfo
 
-client = Groq(model="mixtral-8x7b-32768", api_key=os.environ["GROQ_API_KEY"])
+load_dotenv()
+client = Groq(api_key=os.environ["GROQ_API_KEY"])
 
 ### Download all the files
 def download_repo(repo_url, target_dir=None):
@@ -191,7 +192,6 @@ def summarization(node: "FileInfo", map_filepath_to_sum: dict):
 if __name__ == "__main__":
     dir = "./git_src"
     url = "https://github.com/matthewjgunton/CSE341project.git"
-    load_dotenv()
     try:
         if download_repo(url, target_dir=dir):
             root = dfs_directory_files(dir, 
@@ -207,8 +207,6 @@ if __name__ == "__main__":
     finally:
         clean_up_dir(dir)
 
-
-
 class GitIngestion:
     def __init__(self, url: str, 
                  ignored_extensions:dict={".jar", ".class", ".ico", ".png", ".jpeg", ".jpg"}, 
@@ -220,7 +218,6 @@ class GitIngestion:
     def run(self):
         dir = "./git_src"
         try:
-            load_dotenv()
             if download_repo(self.url, target_dir=dir):
                 root = dfs_directory_files(dir, 
                                             ignored_extensions=self.ignored_extensions,
