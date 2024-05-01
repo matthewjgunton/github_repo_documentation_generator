@@ -27,8 +27,9 @@ load_dotenv()
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 github_token = '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'
 
-reader = SimpleDirectoryReader(input_dir="/Users/nikhil/SideProjects/coursera-tensorflow-course/")
+reader = SimpleDirectoryReader(input_dir="/Users/nikhil/Desktop/CSE341project")
 documents =  reader.load_data()
+
 
 #Embed Documents
 Settings.embed_model = HuggingFaceEmbedding(
@@ -37,18 +38,29 @@ Settings.embed_model = HuggingFaceEmbedding(
 
 # Create the vector store
 chroma_client = chromadb.EphemeralClient()
-chroma_collection = chroma_client.get_or_create_collection("quickstart")
-vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
-storage_context = StorageContext.from_defaults(vector_store=vector_store)
+chroma_collection_simple = chroma_client.get_or_create_collection("simple_dir_reader")
+vector_store_simple = ChromaVectorStore(chroma_collection=chroma_collection_simple)
+storage_context_simple = StorageContext.from_defaults(vector_store=vector_store_simple)
+
+
+chroma_collection_ingestion = chroma_client.get_or_create_collection("ingestion_reader")
+vector_store_ingestion = ChromaVectorStore(chroma_collection=chroma_collection_ingestion)
+storage_context_ingestion = StorageContext.from_defaults(vector_store=vector_store_ingestion)
+
 
 # Create the index
-index = VectorStoreIndex.from_documents(
-    documents, storage_context=storage_context, embed_model=Settings.embed_model
+index_simple = VectorStoreIndex.from_documents(
+    documents, storage_context=storage_context_simple, embed_model=Settings.embed_model
+)
+
+index_ingestion = VectorStoreIndex.from_documents(
+    documents, storage_context=storage_context_ingestion, embed_model=Settings.embed_model
 )
 
 # Create the query engine
 llm = Groq(model="mixtral-8x7b-32768", api_key=os.environ["GROQ_API_KEY"])
-query_engine = index.as_query_engine(llm=llm)
+query_engine_simple = index_simple.as_query_engine(llm=llm)
+query_engine_ingestion = index_ingestion.as_query_engine(llm=llm)
 
 #Simple app to extract the math problems from an uploaded PDF file of a math textbook
 def app():
@@ -91,13 +103,14 @@ def app():
                                             'user_message_no': st.session_state.msg_counter})
         
         raq_query = prompt
-        rag_response = query_engine.query(raq_query)
-        prompt_for_model = f'''
+        rag_response_simple = query_engine_simple.query(raq_query)
+        rag_response_ingestion = query_engine_ingestion.query(raq_query)
+        prompt_for_model_simple = f'''
         
         
         You are a helpful assistant that helps developers understand their Git repos. Here are the files in their repo
     
-        {rag_response}
+        {rag_response_simple}
         
         You will recieve multiple messages throughout the conversation. Here is a list of the previous messages and your responses:
         
@@ -105,20 +118,35 @@ def app():
         
         Below the teacher will input their query to you:        
         ''' + prompt
+
+        prompt_for_model_ingestion = f'''
+        
+        
+        You are a helpful assistant that helps developers understand their Git repos. Here are the files in their repo
+    
+        {rag_response_ingestion}
+        
+        Below the teacher will input their query to you:        
+        ''' + prompt
         
         print(st.session_state.messages)
         
-        response = groq_helper(prompt=prompt_for_model)
-        llm_response = response.choices[0].message.content
+        response_simple = groq_helper(prompt=prompt_for_model_simple)
+        llm_response_simple = response_simple.choices[0].message.content
         
+        response_ingestion = groq_helper(prompt=prompt_for_model_simple)
+        llm_response_ingestion = response_simple.choices[0].message.content
+
         with st.chat_message("assistant"):
-            st.markdown("Assistant Response:")
-            st.markdown(llm_response)
-            st.markdown(f"RAG Retrieval: {rag_response}")
-            st.markdown(f"Retrieved Response Metadata: {rag_response.metadata}")
+            st.markdown("# Simple Response:")
+            st.markdown(llm_response_ingestion)
+            st.markdown("# Ingestion Response:")
+            st.markdown(llm_response_simple)
+            st.markdown(f"# RAG Retrieval Simple: \n {rag_response_simple} \n metadata: {rag_response_simple.metadata}")
+            st.markdown(f"RAG Retrieval Ingestion: \n {rag_response_ingestion} \n metadata: {rag_response_simple.metadata}")
             # Add LLM response to chat history
             st.session_state.messages.append({"role": "assistant", 
-                                            "content": llm_response,
+                                            "content": llm_response_simple,
                                             "assistant_msg_counter": st.session_state.msg_counter})
             st.session_state.msg_counter += 1
         
