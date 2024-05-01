@@ -1,3 +1,4 @@
+import anthropic
 from groq import Groq
 from dotenv import load_dotenv
 import os
@@ -7,9 +8,6 @@ import traceback
 import time
 
 from file_info import FileInfo
-
-load_dotenv()
-client = Groq(api_key=os.environ["GROQ_API_KEY"])
 
 ### Download all the files
 def download_repo(repo_url, target_dir=None):
@@ -80,11 +78,40 @@ def retry_wrapper(fn, *args):
     return None
 
 ### callLLM
-def callLLM(file_text, file_path):
+def summarize_file(file_text, file_path, client):
+    prompt = f'<document><name>{file_path}</name><text>{file_text}</text></document>'
+    return callLLM(prompt, False, client)
+
+def callAnthropic(prompt:str, isDir:bool, client):
+    sysPrompt = ""
+    if isDir:
+        sysPrompt = "Read above documents. Give a succinct summary that explains all of them. Give your response in markdown"
+    else:
+        sysPrompt = "Read the source code and write a succinct and accurate summary. Give your response in markdown"
+
+    msg = []
+    msg.append(
+        {"role": "user", "content": prompt + " " +sysPrompt}
+    )
+
+    message = client.messages.create(
+        model="claude-3-haiku-20240307",
+        max_tokens=1024,
+        messages=msg
+    )
+    return message.content[0].text
+
+def callGroq(prompt:str, isDir:bool, client):
+
+    sysPrompt = ""
+    if isDir:
+        sysPrompt = "[Inst]Read the user's source code. It will be enclosed within the <document> tag with the filename enclosed within the <name> tag. There may be multiple documents. Write a succinct and accurate summary of all documents. Give your response in markdown[/Inst]"
+    else:
+        sysPrompt = "[Inst]Read the user's source code. It will be enclosed within the <document> tag with the filename enclosed within the <name> tag. Write a succinct and accurate summary. Give your response in markdown[/Inst]"
+
     msg = [
-        {"role": "system", "content": "[Inst]Read the user's source code. It will be enclosed within the <document> tag with the filename enclosed within the <name> tag. Write a succinct and accurate summary. Give your response in markdown[/Inst]"}
+        {"role": "system", "content": sysPrompt}
     ]
-    prompt = f'<document><name>{file_path}</name><text>{file_text}</text></document> Read the source code and write a succinct and accurate summary. Give your response in markdown'
     msg.append(
         {"role": "user", "content": prompt}
     )
@@ -98,16 +125,13 @@ def callLLM(file_text, file_path):
 
     return chat_completion.choices[0].message.content
 
-### callLLM_summarize
 ### possible error here in bigger files
-def summarizeDir(list_of_summaries, list_of_file_names, batch_size):
+def summarizeDir(list_of_summaries, list_of_file_names, batch_size, client):
     results_list = []
     index_file_name = 0
     while len(list_of_summaries) > 0:
         time.sleep(2)
-        msg = [
-            {"role": "system", "content": "[Inst]Read the user's source code. It will be enclosed within the <document> tag with the filename enclosed within the <name> tag. There may be multiple documents. Write a succinct and accurate summary of all documents. Give your response in markdown[/Inst]"}
-        ]   
+        msg = []   
         current_batch = len(msg[0].content)
         index_of_list_of_summaries = 0
         prompt = ""
@@ -120,20 +144,12 @@ def summarizeDir(list_of_summaries, list_of_file_names, batch_size):
             index_of_list_of_summaries += 1
             index_file_name += 1
         list_of_summaries = list_of_summaries[index_of_list_of_summaries:]
-
-        msg.append(
-            {"role": "user", "content": prompt}
-        )
-
-        chat_completion = client.chat.completions.create(
-            messages=msg,
-            model="mixtral-8x7b-32768",
-            max_tokens=1024,
-            stream=False
-        )
-        results_list.append(chat_completion.choices[0].message.content)
+        results_list.append(callLLM(prompt, True, client))
     return results_list
 
+# wrapper to let us quickly switch between providers
+def callLLM(prompt, isDir, client):
+    return callAnthropic(prompt, isDir, client)
 
 def clean_up_dir(path):
     try:
@@ -176,54 +192,43 @@ def write_to_file(map):
         # If any errors occur during file opening or writing, raise an exception
         raise Exception(f"Failed to write to the file: {e}")
 
-def summarization(node: "FileInfo", map_filepath_to_sum: dict):
+def summarization(node: "FileInfo", map_filepath_to_sum: dict, client):
     summary = None
     print("Summarization: " + node.file_path)
     if len(node.children) == 0:
-        summary = retry_wrapper(callLLM, get_file_text(node.file_path), node.file_path)
+        summary = retry_wrapper(callLLM, get_file_text(node.file_path), node.file_path, client)
     else:
         summary_list = []
         for child in node.children:
-            summary_list.append(summarization(child, map_filepath_to_sum))
-        summary = retry_wrapper( summarizeDir, summary_list, [child.file_path for child in node.children], 10000)
+            summary_list.append(summarization(child, map_filepath_to_sum, client))
+        summary = retry_wrapper( summarizeDir, summary_list, [child.file_path for child in node.children], 10000, client)
     map_filepath_to_sum[node.file_path] = summary
     return summary
 
-if __name__ == "__main__":
-    dir = "./git_src"
-    url = "https://github.com/matthewjgunton/CSE341project.git"
-    try:
-        if download_repo(url, target_dir=dir):
-            root = dfs_directory_files(dir, 
-                                        ignored_extensions={".jar", ".class", ".ico", ".png", ".jpeg", ".jpg"},
-                                        ignored_directories={".git", ".github", "frontend", "imgs", "arena", "oracle"})
-            map_filepath_to_sum = {}
-            summarization(root, map_filepath_to_sum)
-            write_to_file(map_filepath_to_sum)
-        else:
-            print("ERROR RUNNING SCRIPT")
-    except Exception:
-        print(traceback.format_exc())
-    finally:
-        clean_up_dir(dir)
-
 class GitIngestion:
-    def __init__(self, url: str, 
+    def __init__(self, url: str, provider:str, 
                  ignored_extensions:dict={".jar", ".class", ".ico", ".png", ".jpeg", ".jpg"}, 
                  ignored_directories:dict={".git", ".github", "frontend", "imgs", "arena", "oracle"}):
         self.url = url
         self.ignored_extensions=ignored_extensions
         self.ignored_directories=ignored_directories
+        load_dotenv()
+        if provider == "groq":
+            self.client = Groq(api_key=os.environ["GROQ_API_KEY"])
+        if provider == "claude":
+            self.client = anthropic.Anthropic(
+                api_key=os.environ["ANTHROPIC_API_KEY"]
+            )
 
     def run(self):
-        dir = "./git_src"
         try:
+            dir = "./git_src"
             if download_repo(self.url, target_dir=dir):
                 root = dfs_directory_files(dir, 
                                             ignored_extensions=self.ignored_extensions,
                                             ignored_directories=self.ignored_directories)
                 map_filepath_to_sum = {}
-                summarization(root, map_filepath_to_sum)
+                summarization(root, map_filepath_to_sum, self.client)
                 write_to_file(map_filepath_to_sum)
             else:
                 print("ERROR RUNNING SCRIPT")
@@ -232,3 +237,7 @@ class GitIngestion:
         finally:
             clean_up_dir(dir)
 
+if __name__ == "__main__":
+    url = "https://github.com/matthewjgunton/CSE341project.git"
+    instance = GitIngestion(url, "claude")
+    instance.run()
