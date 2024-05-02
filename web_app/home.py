@@ -10,61 +10,70 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core import Settings
 from llama_index.core import (
     SimpleDirectoryReader,
-    load_index_from_storage,
     VectorStoreIndex,
     StorageContext,
 )
-from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Document
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.core import StorageContext
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from IPython.display import Markdown, display
 import chromadb
 from llama_index.llms.groq import Groq
 
+from git_ingestion import GitIngestion
 
 load_dotenv()
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 github_token = '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'
 
-reader = SimpleDirectoryReader(input_dir="/Users/nikhil/Desktop/CSE341project")
-documents =  reader.load_data()
+@st.cache_resource
+def setup_data_store(url):
+
+    dir = "./git_src"
+    git_ingestion = GitIngestion(url, "claude", dir)
+    text = git_ingestion.run()
+
+    doc = Document(text=text)
+
+    reader = SimpleDirectoryReader(input_dir=dir)
+    documents =  reader.load_data()
+
+    #Embed Documents
+    Settings.embed_model = HuggingFaceEmbedding(
+        model_name="BAAI/bge-small-en-v1.5"
+    )
+
+    # Create the vector store
+    chroma_client = chromadb.EphemeralClient()
+    chroma_collection_simple = chroma_client.get_or_create_collection("simple_dir_reader")
+    vector_store_simple = ChromaVectorStore(chroma_collection=chroma_collection_simple)
+    storage_context_simple = StorageContext.from_defaults(vector_store=vector_store_simple)
 
 
-#Embed Documents
-Settings.embed_model = HuggingFaceEmbedding(
-    model_name="BAAI/bge-small-en-v1.5"
-)
-
-# Create the vector store
-chroma_client = chromadb.EphemeralClient()
-chroma_collection_simple = chroma_client.get_or_create_collection("simple_dir_reader")
-vector_store_simple = ChromaVectorStore(chroma_collection=chroma_collection_simple)
-storage_context_simple = StorageContext.from_defaults(vector_store=vector_store_simple)
+    chroma_collection_ingestion = chroma_client.get_or_create_collection("ingestion_reader")
+    vector_store_ingestion = ChromaVectorStore(chroma_collection=chroma_collection_ingestion)
+    storage_context_ingestion = StorageContext.from_defaults(vector_store=vector_store_ingestion)
 
 
-chroma_collection_ingestion = chroma_client.get_or_create_collection("ingestion_reader")
-vector_store_ingestion = ChromaVectorStore(chroma_collection=chroma_collection_ingestion)
-storage_context_ingestion = StorageContext.from_defaults(vector_store=vector_store_ingestion)
+    # Create the index
+    index_simple = VectorStoreIndex.from_documents(
+        documents, storage_context=storage_context_simple, embed_model=Settings.embed_model
+    )
 
+    index_ingestion = VectorStoreIndex.from_documents(
+        doc, storage_context=storage_context_ingestion, embed_model=Settings.embed_model
+    )
 
-# Create the index
-index_simple = VectorStoreIndex.from_documents(
-    documents, storage_context=storage_context_simple, embed_model=Settings.embed_model
-)
-
-index_ingestion = VectorStoreIndex.from_documents(
-    documents, storage_context=storage_context_ingestion, embed_model=Settings.embed_model
-)
-
-# Create the query engine
-llm = Groq(model="mixtral-8x7b-32768", api_key=os.environ["GROQ_API_KEY"])
-query_engine_simple = index_simple.as_query_engine(llm=llm)
-query_engine_ingestion = index_ingestion.as_query_engine(llm=llm)
+    # Create the query engine
+    llm = Groq(model="mixtral-8x7b-32768", api_key=os.environ["GROQ_API_KEY"])
+    query_engine_simple = index_simple.as_query_engine(llm=llm)
+    query_engine_ingestion = index_ingestion.as_query_engine(llm=llm)
+    return query_engine_ingestion, query_engine_simple
 
 #Simple app to extract the math problems from an uploaded PDF file of a math textbook
 def app():
     init_state()
+    query_engine_simple, query_engine_ingestion = setup_data_store()
 
     #Streamlit portion:
     st.title("Repo Tools App")

@@ -192,6 +192,7 @@ def write_to_file(map):
         with open(file_path, 'w', encoding='utf-8') as md_file:
             md_file.write(text)
             print(f"Text has been successfully written to {file_path}")
+        return text
     except Exception as e:
         # If any errors occur during file opening or writing, raise an exception
         raise Exception(f"Failed to write to the file: {e}")
@@ -210,7 +211,7 @@ def summarization(node: "FileInfo", map_filepath_to_sum: dict, client):
     return summary
 
 class GitIngestion:
-    def __init__(self, url: str, provider:str, 
+    def __init__(self, url: str, provider:str, dir:str = "./git_src",
                  ignored_extensions:dict={".jar", ".class", ".ico", ".png", ".jpeg", ".jpg"}, 
                  ignored_directories:dict={".git", ".github", "frontend", "imgs", "arena", "oracle"}):
         self.url = url
@@ -223,23 +224,25 @@ class GitIngestion:
             self.client = Anthropic(
                 api_key=os.environ["ANTHROPIC_API_KEY"]
             )
+        self.dir = dir
 
     def run(self):
         try:
-            dir = "./git_src"
-            if download_repo(self.url, target_dir=dir):
+            if download_repo(self.url, target_dir=self.dir):
                 root = dfs_directory_files(dir, 
                                             ignored_extensions=self.ignored_extensions,
                                             ignored_directories=self.ignored_directories)
                 map_filepath_to_sum = {}
                 summarization(root, map_filepath_to_sum, self.client)
-                write_to_file(map_filepath_to_sum)
+                return write_to_file(map_filepath_to_sum)
             else:
                 print("ERROR RUNNING SCRIPT")
         except Exception:
             print(traceback.format_exc())
-        finally:
-            clean_up_dir(dir)
+            clean_up_dir(self.dir)
+
+    def cleanup(self):
+        clean_up_dir(self.dir)
 
 if __name__ == "__main__":
     url = "https://github.com/matthewjgunton/CSE341project.git"
