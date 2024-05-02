@@ -29,11 +29,13 @@ github_token = 'github_pat_11ADZAXDA0Dk4fU3kR9jF2_BHC5zKQ6EMpa74MAmz1IK9L84aNKZe
 @st.cache_resource
 def setup_data_store(url):
 
-    #dir = "./git_src"
-    #git_ingestion = GitIngestion(url, "claude", dir)
+    dir = "./git_src"
+    git_ingestion = GitIngestion(url, "claude", dir)
     #text = git_ingestion.run()
 
-    documents = SimpleDirectoryReader("../chrome_extension").load_data()
+    text = "This is a test string"
+    documents = [Document(text=text)]
+    #documents = [SimpleDirectoryReader(dir).load_data()]
 
     #Embed Documents
     Settings.embed_model = HuggingFaceEmbedding(
@@ -65,7 +67,7 @@ def setup_data_store(url):
 #Simple app to extract the math problems from an uploaded PDF file of a math textbook
 def app():
     init_state()
-    query_engine_ingestion = setup_data_store('https://github.com/matthewjgunton/CSE341project.git')
+    query_engine_ingestion = setup_data_store('https://github.com/ng4567/TransformersNLP.git')
 
     #Streamlit portion:
     st.title("Repo Tools App")
