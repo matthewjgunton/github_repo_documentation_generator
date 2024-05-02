@@ -19,8 +19,8 @@ from llama_index.core import StorageContext
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 import chromadb
 from llama_index.llms.groq import Groq
-
 from git_ingestion import GitIngestion
+import time
 
 load_dotenv()
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
@@ -29,51 +29,43 @@ github_token = 'github_pat_11ADZAXDA0Dk4fU3kR9jF2_BHC5zKQ6EMpa74MAmz1IK9L84aNKZe
 @st.cache_resource
 def setup_data_store(url):
 
-    dir = "./git_src"
-    git_ingestion = GitIngestion(url, "claude", dir)
-    text = git_ingestion.run()
+    #dir = "./git_src"
+    #git_ingestion = GitIngestion(url, "claude", dir)
+    #text = git_ingestion.run()
 
-    doc = Document(text=text)
-
-    reader = SimpleDirectoryReader(input_dir=dir)
-    documents =  reader.load_data()
+    documents = SimpleDirectoryReader("../chrome_extension").load_data()
 
     #Embed Documents
     Settings.embed_model = HuggingFaceEmbedding(
         model_name="BAAI/bge-small-en-v1.5"
     )
 
-    # Create the vector store
-    chroma_client = chromadb.EphemeralClient()
-    chroma_collection_simple = chroma_client.get_or_create_collection("simple_dir_reader")
-    vector_store_simple = ChromaVectorStore(chroma_collection=chroma_collection_simple)
-    storage_context_simple = StorageContext.from_defaults(vector_store=vector_store_simple)
+    start_time = time.time()
 
-
-    chroma_collection_ingestion = chroma_client.get_or_create_collection("ingestion_reader")
-    vector_store_ingestion = ChromaVectorStore(chroma_collection=chroma_collection_ingestion)
-    storage_context_ingestion = StorageContext.from_defaults(vector_store=vector_store_ingestion)
-
-
-    # Create the index
-    index_simple = VectorStoreIndex.from_documents(
-        documents, storage_context=storage_context_simple, embed_model=Settings.embed_model
-    )
-
+    client = chromadb.PersistentClient(path="./cache")
+    chroma_collection = client.get_or_create_collection(name="my_collection")
+    
+    vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+    storage_context_ingestion = StorageContext.from_defaults(vector_store=vector_store)
     index_ingestion = VectorStoreIndex.from_documents(
-        doc, storage_context=storage_context_ingestion, embed_model=Settings.embed_model
-    )
+        documents, storage_context=storage_context_ingestion, embed_model=Settings.embed_model
+        )
+
+
+    end_time = time.time()
+    time_taken = end_time - start_time
+    print(f"Total Embedding Time taken: {time_taken:.6f} seconds")
+
 
     # Create the query engine
     llm = Groq(model="mixtral-8x7b-32768", api_key=os.environ["GROQ_API_KEY"])
-    query_engine_simple = index_simple.as_query_engine(llm=llm)
     query_engine_ingestion = index_ingestion.as_query_engine(llm=llm)
-    return query_engine_ingestion, query_engine_simple
+    return query_engine_ingestion
 
 #Simple app to extract the math problems from an uploaded PDF file of a math textbook
 def app():
     init_state()
-    query_engine_simple, query_engine_ingestion = setup_data_store()
+    query_engine_ingestion = setup_data_store('https://github.com/matthewjgunton/CSE341project.git')
 
     #Streamlit portion:
     st.title("Repo Tools App")
@@ -112,21 +104,7 @@ def app():
                                             'user_message_no': st.session_state.msg_counter})
         
         raq_query = prompt
-        rag_response_simple = query_engine_simple.query(raq_query)
         rag_response_ingestion = query_engine_ingestion.query(raq_query)
-        prompt_for_model_simple = f'''
-        
-        
-        You are a helpful assistant that helps developers understand their Git repos. Here are the files in their repo
-    
-        {rag_response_simple}
-        
-        You will recieve multiple messages throughout the conversation. Here is a list of the previous messages and your responses:
-        
-        {st.session_state.messages}
-        
-        Below the teacher will input their query to you:        
-        ''' + prompt
 
         prompt_for_model_ingestion = f'''
         
@@ -138,24 +116,16 @@ def app():
         Below the teacher will input their query to you:        
         ''' + prompt
         
-        print(st.session_state.messages)
-        
-        response_simple = groq_helper(prompt=prompt_for_model_simple)
-        llm_response_simple = response_simple.choices[0].message.content
-        
-        response_ingestion = groq_helper(prompt=prompt_for_model_simple)
-        llm_response_ingestion = response_simple.choices[0].message.content
+        print(st.session_state.messages) 
+        response_ingestion = groq_helper(prompt=prompt_for_model_ingestion)
+        llm_response_ingestion = response_ingestion.choices[0].message.content
 
         with st.chat_message("assistant"):
-            st.markdown("# Simple Response:")
             st.markdown(llm_response_ingestion)
             st.markdown("# Ingestion Response:")
-            st.markdown(llm_response_simple)
-            st.markdown(f"# RAG Retrieval Simple: \n {rag_response_simple} \n metadata: {rag_response_simple.metadata}")
-            st.markdown(f"RAG Retrieval Ingestion: \n {rag_response_ingestion} \n metadata: {rag_response_simple.metadata}")
             # Add LLM response to chat history
             st.session_state.messages.append({"role": "assistant", 
-                                            "content": llm_response_simple,
+                                            "content": llm_response_ingestion,
                                             "assistant_msg_counter": st.session_state.msg_counter})
             st.session_state.msg_counter += 1
         
