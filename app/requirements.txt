@@ -94,3 +94,4 @@ llama_index.vector_stores.chroma
 llama_index.llms.groq
 IPython
 nbconvert
+PyPDF2
