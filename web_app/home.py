@@ -67,7 +67,12 @@ def setup_data_store(url):
 #Simple app to extract the math problems from an uploaded PDF file of a math textbook
 def app():
     init_state()
-    query_engine_ingestion = setup_data_store('https://github.com/ng4567/TransformersNLP.git')
+
+    with st.form("github url"):
+        url = st.text_input("github url")
+        submit = st.form_submit_button("Submit")
+        if submit:
+            query_engine_ingestion = setup_data_store(url)
 
     #Streamlit portion:
     st.title("Repo Tools App")
