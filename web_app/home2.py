@@ -1109,7 +1109,7 @@ def app():
     link_to_data = "https://github.com/Significant-Gravitas/AutoGPT.git"
     st.markdown(f'<label for="file_uploader">Note: This app is a WIP. It is not guaranteed to work with large files or other repos, and so far has only been tested on the following repo: <a href="{link_to_data}" target="_blank">Link</a></label>', unsafe_allow_html=True)
     
-    st.title("Chat with Lesson Planner Assistant:")
+    st.title("Chat with Git Repo Understanding Assistant:")
 
     st.session_state.msg_counter = 0
 
@@ -1170,8 +1170,8 @@ def app():
         response_simple = groq_helper(prompt=prompt_for_model_simple)
         llm_response_simple = response_simple.choices[0].message.content
         
-        response_ingestion = groq_helper(prompt=prompt_for_model_simple)
-        llm_response_ingestion = response_simple.choices[0].message.content
+        response_ingestion = groq_helper(prompt=prompt_for_model_ingestion)
+        llm_response_ingestion = response_ingestion.choices[0].message.content
 
         with st.chat_message("assistant"):
             st.markdown("# Simple Response:")
@@ -1179,7 +1179,7 @@ def app():
             st.markdown("# Ingestion Response:")
             st.markdown(llm_response_simple)
             st.markdown(f"# RAG Retrieval Simple: \n {rag_response_simple} \n metadata: {rag_response_simple.metadata}")
-            st.markdown(f"# RAG Retrieval Ingestion: \n {rag_response_ingestion} \n metadata: {rag_response_simple.metadata}")
+            st.markdown(f"# RAG Retrieval Ingestion: \n {rag_response_ingestion} \n metadata: {rag_response_ingestion.metadata}")
             # Add LLM response to chat history
             st.session_state.messages.append({"role": "assistant", 
                                             "content": llm_response_simple,
