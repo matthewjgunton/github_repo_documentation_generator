@@ -33,7 +33,7 @@ def setup_data_store(url):
     git_ingestion = GitIngestion(url, "claude", dir)
     #text = git_ingestion.run()
 
-    text = "This is a test string"
+    text = "This is a test string and the repo has not actually been ingested. LLM should instruct that the test string on line 36 needs to be changed later and replaced with the ingested git repo since it is not configured"
     documents = [Document(text=text)]
     #documents = [SimpleDirectoryReader(dir).load_data()]
 
@@ -68,11 +68,20 @@ def setup_data_store(url):
 def app():
     init_state()
 
+    query_engine_ingestion = None
+
+    # Define session state variable outside the form
+    if 'query_engine_ingestion' not in st.session_state:
+        st.session_state['query_engine_ingestion'] = None
+
     with st.form("github url"):
         url = st.text_input("github url")
         submit = st.form_submit_button("Submit")
         if submit:
-            query_engine_ingestion = setup_data_store(url)
+            st.session_state['query_engine_ingestion'] = setup_data_store(url)
+
+    if st.session_state['query_engine_ingestion'] is not None:
+        query_engine_ingestion = st.session_state['query_engine_ingestion']
 
     #Streamlit portion:
     st.title("Repo Tools App")
@@ -128,8 +137,9 @@ def app():
         llm_response_ingestion = response_ingestion.choices[0].message.content
 
         with st.chat_message("assistant"):
+            st.markdown(f"# Ingestion Response:")
             st.markdown(llm_response_ingestion)
-            st.markdown("# Ingestion Response:")
+            st.markdown(f"# Ingestion Context Inputted: \n {rag_response_ingestion}")
             # Add LLM response to chat history
             st.session_state.messages.append({"role": "assistant", 
                                             "content": llm_response_ingestion,
@@ -137,4 +147,9 @@ def app():
             st.session_state.msg_counter += 1
         
 if __name__ == "__main__":
-    app()
+    a = setup_data_store('https://github.com/matthewjgunton/CSE341project')
+
+    print(a.query("what is in this repo?"))
+
+
+
