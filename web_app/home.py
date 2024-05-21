@@ -31,9 +31,9 @@ def setup_data_store(url):
 
     dir = "./git_src"
     git_ingestion = GitIngestion(url, "claude", dir)
-    #text = git_ingestion.run()
+    text = git_ingestion.run()
 
-    text = "This is a test string and the repo has not actually been ingested. LLM should instruct that the test string on line 36 needs to be changed later and replaced with the ingested git repo since it is not configured"
+    #text = "This is a test string and the repo has not actually been ingested. LLM should instruct that the test string on line 36 needs to be changed later and replaced with the ingested git repo since it is not configured"
     documents = [Document(text=text)]
     #documents = [SimpleDirectoryReader(dir).load_data()]
 
@@ -147,9 +147,7 @@ def app():
             st.session_state.msg_counter += 1
         
 if __name__ == "__main__":
-    a = setup_data_store('https://github.com/matthewjgunton/CSE341project')
-
-    print(a.query("what is in this repo?"))
+    app()
 
 
 

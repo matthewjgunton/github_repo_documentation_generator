@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import traceback
 import time
-
+import chardet
 from file_info import FileInfo
 
 ### Download all the files
@@ -29,40 +29,56 @@ def download_repo(repo_url, target_dir=None):
 
 ### Run through each & make an API Call
 #### Depth-First Search here
-def dfs_directory_files(start_path, 
-                        ignored_directories={".git"}, 
-                        ignored_extensions={'.tmp', '.log'},
-                        ignored_files={"README.md"}):
+def dfs_directory_files(start_path, ignored_directories={".git"}, ignored_extensions={'.tmp', '.log'}, ignored_files={"README.md"}):
+    print(f"START PATH: {start_path}")
     if not os.path.isdir(start_path):
         raise ValueError(f"The provided path {start_path} is not a directory or does not exist.")
-    
+
     root = FileInfo(None, start_path, None)
-    stack : list["FileInfo"] = [root]
-    while stack:
-        parent = stack.pop()
-        current_path = parent.file_path
-        if root is None:
-            root = parent
-        try:
-            entries = os.listdir(current_path)
-        except PermissionError:
-            # Skip directories where access is denied
-            continue
+    stack: list["FileInfo"] = [root]
 
-        for entry in sorted(entries, reverse=True):  # Reverse sort to maintain usual DFS order
-            full_path = os.path.join(current_path, entry)
-            if os.path.isdir(full_path) and entry not in ignored_directories:
-                child = FileInfo(None, full_path, parent)
-                stack.append(child)
-                parent.__add_children__(child)
-            elif os.path.isfile(full_path) and entry not in ignored_files:
-                # Check file extension against ignored_extensions set
-                _, ext = os.path.splitext(entry)
-                if ext not in ignored_extensions:
+    with open("source.txt", "w", encoding="utf-8") as output_file:
+        while stack:
+            parent = stack.pop()
+            current_path = parent.file_path
+            if root is None:
+                root = parent
+            try:
+                entries = os.listdir(current_path)
+            except PermissionError:
+                # Skip directories where access is denied
+                continue
+
+            for entry in sorted(entries, reverse=True):
+                # Reverse sort to maintain usual DFS order
+                full_path = os.path.join(current_path, entry)
+                if os.path.isdir(full_path) and entry not in ignored_directories:
                     child = FileInfo(None, full_path, parent)
+                    stack.append(child)
                     parent.__add_children__(child)
-    return root                    
+                elif os.path.isfile(full_path) and entry not in ignored_files:
+                    # Check file extension against ignored_extensions set
+                    _, ext = os.path.splitext(entry)
+                    if ext not in ignored_extensions:
+                        child = FileInfo(None, full_path, parent)
+                        parent.__add_children__(child)
+                        output_file.write(f"<------------FILENAME----------->\\n{full_path}\\n")
+                        try:
+                            with open(full_path, "rb") as file:
+                                result = chardet.detect(file.read())
+                                encoding = result['encoding']
+                            with open(full_path, "r", encoding=encoding) as file:
+                                output_file.write(file.read())
+                        except (UnicodeDecodeError, LookupError):
+                            output_file.write(f"[Unable to decode {full_path}]\\n")
+                        output_file.write(f"\\n<------------FILENAME----------->\\n\\n")
 
+    with open("source.txt", "r", encoding="utf-8") as output_file:
+        source_text = output_file.read()
+    
+    return source_text
+
+            
 def retry_wrapper(fn, *args):
     max_tries = 3
     curr_try = 0
@@ -132,7 +148,7 @@ def summarizeDir(list_of_summaries, list_of_file_names, batch_size, client):
     while len(list_of_summaries) > 0:
         time.sleep(2)
         msg = []   
-        current_batch = len(msg[0].content)
+        current_batch = 0
         index_of_list_of_summaries = 0
         prompt = ""
         for summary in list_of_summaries:
@@ -185,13 +201,15 @@ def write_to_file(map):
                 for item in value:
                     text += item +"\n"
             else:
-                text += "## " + key + ":\n" + value + "\n"
+                text += "##" + key + ":\n" + value + "\n"
             text += "\n\n"
-            
+            print({f"KEY, VALUE: {key}, {value}"})
         # Open the file in write mode. This will overwrite the existing content.
         with open(file_path, 'w', encoding='utf-8') as md_file:
             md_file.write(text)
             print(f"Text has been successfully written to {file_path}")
+            print(f"TEXT VARIABLE: {text}")
+            print(file_path)
         return text
     except Exception as e:
         # If any errors occur during file opening or writing, raise an exception
@@ -210,9 +228,12 @@ def summarization(node: "FileInfo", map_filepath_to_sum: dict, client):
     map_filepath_to_sum[node.file_path] = summary
     return summary
 
+
+
+
 class GitIngestion:
     def __init__(self, url: str, provider:str, dir:str = "./git_src",
-                 ignored_extensions:dict={".jar", ".class", ".ico", ".png", ".jpeg", ".jpg"}, 
+                 ignored_extensions:dict={".jar", ".class", ".ico", ".png", ".jpeg", ".jpg", ".pdf"}, 
                  ignored_directories:dict={".git", ".github", "frontend", "imgs", "arena", "oracle"}):
         self.url = url
         self.ignored_extensions=ignored_extensions
@@ -228,13 +249,10 @@ class GitIngestion:
 
     def run(self):
         try:
+            clean_up_dir(self.dir)
             if download_repo(self.url, target_dir=self.dir):
-                root = dfs_directory_files(dir, 
-                                            ignored_extensions=self.ignored_extensions,
-                                            ignored_directories=self.ignored_directories)
-                map_filepath_to_sum = {}
-                summarization(root, map_filepath_to_sum, self.client)
-                return write_to_file(map_filepath_to_sum)
+                source = dfs_directory_files(self.dir)
+                return source
             else:
                 print("ERROR RUNNING SCRIPT")
         except Exception:
@@ -244,7 +262,33 @@ class GitIngestion:
     def cleanup(self):
         clean_up_dir(self.dir)
 
+
+def get_commit_diff(repo_owner, repo_name, commit_sha):
+    """
+    Retrieves the diff for a given commit in a GitHub repository.
+
+    Args:
+        repo_owner (str): The owner of the GitHub repository.
+        repo_name (str): The name of the GitHub repository.
+        commit_sha (str): The SHA-1 hash of the commit.
+
+    Returns:
+        str: The diff for the specified commit.
+    """
+    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/git/commits/{commit_sha}"
+    headers = {
+        "Accept": "application/vnd.github.v3.diff"
+    }
+
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()  # Raise an exception for non-2xx status codes
+
+    return response.text
+
 if __name__ == "__main__":
     url = "https://github.com/matthewjgunton/CSE341project.git"
     instance = GitIngestion(url, "claude")
-    instance.run()
+    source = instance.run()
+    print(source)
+
+
