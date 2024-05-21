@@ -8,6 +8,7 @@ import traceback
 import time
 import chardet
 from file_info import FileInfo
+import requests
 
 ### Download all the files
 def download_repo(repo_url, target_dir=None):
@@ -29,7 +30,7 @@ def download_repo(repo_url, target_dir=None):
 
 ### Run through each & make an API Call
 #### Depth-First Search here
-def dfs_directory_files(start_path, ignored_directories={".git"}, ignored_extensions={'.tmp', '.log'}, ignored_files={"README.md"}):
+def dfs_directory_files(start_path, ignored_directories={".git"}, ignored_extensions={'.tmp', '.log', '.jar', '.env', '.Driver', '.DS_Store'}, ignored_files={"README.md"}):
     print(f"START PATH: {start_path}")
     if not os.path.isdir(start_path):
         raise ValueError(f"The provided path {start_path} is not a directory or does not exist.")
@@ -62,7 +63,7 @@ def dfs_directory_files(start_path, ignored_directories={".git"}, ignored_extens
                     if ext not in ignored_extensions:
                         child = FileInfo(None, full_path, parent)
                         parent.__add_children__(child)
-                        output_file.write(f"<------------FILENAME----------->\\n{full_path}\\n")
+                        output_file.write(f"<------------{full_path}----------->\n\n")
                         try:
                             with open(full_path, "rb") as file:
                                 result = chardet.detect(file.read())
@@ -70,8 +71,8 @@ def dfs_directory_files(start_path, ignored_directories={".git"}, ignored_extens
                             with open(full_path, "r", encoding=encoding) as file:
                                 output_file.write(file.read())
                         except (UnicodeDecodeError, LookupError):
-                            output_file.write(f"[Unable to decode {full_path}]\\n")
-                        output_file.write(f"\\n<------------FILENAME----------->\\n\\n")
+                            output_file.write(f"[Unable to decode {full_path}]\n")
+                        output_file.write(f"\n<------------{full_path}----------->\n\n")
 
     with open("source.txt", "r", encoding="utf-8") as output_file:
         source_text = output_file.read()
@@ -233,8 +234,11 @@ def summarization(node: "FileInfo", map_filepath_to_sum: dict, client):
 
 class GitIngestion:
     def __init__(self, url: str, provider:str, dir:str = "./git_src",
-                 ignored_extensions:dict={".jar", ".class", ".ico", ".png", ".jpeg", ".jpg", ".pdf"}, 
-                 ignored_directories:dict={".git", ".github", "frontend", "imgs", "arena", "oracle"}):
+                 
+                 ignored_extensions:set = ([".jar", ".class", ".ico", ".png", ".jpeg", ".jpg", ".pdf"]), 
+                 ignored_directories:set=([".git", ".github", "frontend", "imgs", "arena", "oracle"])
+                 ):
+ 
         self.url = url
         self.ignored_extensions=ignored_extensions
         self.ignored_directories=ignored_directories
@@ -251,7 +255,7 @@ class GitIngestion:
         try:
             clean_up_dir(self.dir)
             if download_repo(self.url, target_dir=self.dir):
-                source = dfs_directory_files(self.dir)
+                source = dfs_directory_files(self.dir, ignored_directories=self.ignored_directories, ignored_extensions=self.ignored_extensions)
                 return source
             else:
                 print("ERROR RUNNING SCRIPT")

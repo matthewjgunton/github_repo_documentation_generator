@@ -86,11 +86,10 @@ def app():
     #Streamlit portion:
     st.title("Repo Tools App")
 
-    # Link to textbook used in testing
-    link_to_data = "https://github.com/Significant-Gravitas/AutoGPT.git"
+    link_to_data = "https://github.com/matthewjgunton/CSE341project"
     st.markdown(f'<label for="file_uploader">Note: This app is a WIP. It is not guaranteed to work with large files or other repos, and so far has only been tested on the following repo: <a href="{link_to_data}" target="_blank">Link</a></label>', unsafe_allow_html=True)
     
-    st.title("Chat with Lesson Planner Assistant:")
+    st.title("Chat with Assistant:")
 
     st.session_state.msg_counter = 0
 
