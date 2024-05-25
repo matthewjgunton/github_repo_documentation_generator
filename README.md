@@ -27,9 +27,7 @@
 
 ## Web App Usage
 
-Now that you have installed the libraries, to run your app, cd into the /web_app directory and run the following command:
-
-`streamlit run home.py`
+Before running the script you need to configure your GitHub token and omit non-parsable files:
 
 
 ### GitHub Personal Access Token
@@ -53,4 +51,6 @@ git_ingestion = GitIngestion(
 ```
 
 
+Finally, to run the app, cd into the /web_app directory and run the following command:
 
+`streamlit run home.py`
